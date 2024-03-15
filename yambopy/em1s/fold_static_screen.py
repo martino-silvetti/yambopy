@@ -124,13 +124,26 @@ class fold_vX():
       g_QIndexMap = self.Get_Qminusq()
       print("first list Q-q: ", g_QIndexMap.shape)   # (number of Q) times (number of q) 
 #      print(g_QIndexMap)
+      print("Q points                                q points                             g_Q    ")
+      for triplet in g_QIndexMap:
+          np.savetxt(sys.stdout,([self.Qpts[triplet[0]],self.qpts[triplet[1]],self.gvectors[triplet[2]], triplet]), fmt = "%6d")
+ #         print(self.Qpts[triplet[0]],self.qpts[triplet[1]],self.gvectors[triplet[2]], triplet)
       
       # find all the pairs G,g such that g = G + g_Q and return an array [i,j,k] = [Index G, Index g, Index g_Q]. 
       # Note that for a single g_Q there might be more than one (G,g) pair
       g_QMap = self.Getg_Q(g_QIndexMap)
       print("second list G+g_Q: ", g_QMap.shape)
-      print(g_QMap)
-
+      print("G vector                                g vector                             g_Q    ")
+      for triplet in g_QMap :
+          print(self.Gvectors[triplet[0]], self.gvectors[triplet[1]], self.gvectors[triplet[2]], triplet)
+      
+      
+      
+     
+      
+      #g_QMap_opt = self.Get_g_Q_KDTree(g_QIndexMap)
+#      print("second list G+g_Q")
+#      print(g_QMap_opt)
 
       # for debugging: print all remapped [G,g,g_Q] to choose a G and a corresponding g to correctly plot 
       # the Unit cell remapped X_{G,G'} and the supercell X_{g,g'} as functions of |q| and see if they are the same 
@@ -138,24 +151,48 @@ class fold_vX():
       
       
       # remap X_{g,g'}(q) = X_{G,G'}(Q) 
-      X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
-      print("Remapped X shape: ")
-      print(X.shape)
+#      X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
+#      print("Remapped X shape: ")
+#      print(X.shape)
       
       # plot X of folded unit cell vs X of supercell 
-      self.PlotEm1sSc_vs_Exp(self.ScX,X, 72 , 68 , 72 , 68) 
+#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 72 , 68 , 72 , 68) 
       
       #plot X of folded unit cell vs X of unit cell (for the G and g that are in common)
-      self.PlotEm1sUc_vs_Exp(self.UcX,X, 8 , 4, 72 , 68 )
-      #                                  A  /    \   \      
-      #                                  | /      \_  \
-      #                                 put          put
-      #                              G vector      g vector
-      #                                here          here                                 
+#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 8 , 4    ,  72   , 68 )
+      #                                  A    A        A      A      
+      #                                  |    |        |      |
+      #                               put G vector    put g vector
+      #                                   here           here                                 
       
       print("Folded databases saved")
 
+  def Get_g_Q_KDTree(self, All_g_Q_indices):
+      # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
+      g_Q_IndexCleanList = np.unique(All_g_Q_indices[:,2])
+      #print(g_Q_IndexCleanList)  
+      # Acquire all the g_Qs corresponding to the left over indices
+      g_Q = np.array([self.gvectors[i] for i in g_Q_IndexCleanList])
+      start2 = time.time()  
+      Gplusg_Q = self.Gvectors[:,np.newaxis]+g_Q   # Gplusg_Q array of shape (number of G vectors) times (number of not doubly counted g_Q) 
+      print(Gplusg_Q.shape)
+      IndexList = []
+      for IndexG, GpgQ in enumerate(Gplusg_Q): # i.e. for each G
+             # point_matching(a,b,double_check) returns an array of lenght len(b) of elements p[i] such that a[p] is the one that
+             # is the closest to element b[i]
+             gIndicesCurrentG = point_matching(self.gvectors,GpgQ, double_check = False)
+             gIndicesClean = np.unique(gIndicesCurrentG)
+             IndexList.append(gIndicesCurrentG)
+             for Indexg in gIndicesClean :
+                Correspg_Q = gIndicesCurrentG.where(Indexg)
+                for Indexg_Q, g_QColumn in enumerate(Correspg_Q) : 
+                    if abs(GpgQ[g_QColumn] - self.gvectors[Indexg]) < threshold :
+                        IndexGggQ.append([IndexG, Indexg  , Indexg_Q])
+                        continue
 
+      print("time2 : ", time.time()-start2)
+      
+      return np.array(IndexList) # returns the indices of g vectors in an array of shape (number of G vectors) times (number of g_Q)
     
   
   def Get_Qminusq(self, threshold = 1E-6):
@@ -200,7 +237,10 @@ class fold_vX():
       #The problem with Get_g_Q_KDTree is that it makes use of KDTree in point_matching, meaning that it finds the g 
       #that is the closest to G+g_Q, which is not necessarily the one that is "equal" to G+g_Q (in a tolerance interval). Here G and g_Q not connected by
       #any g vector are mearked as "nf" not found
-      print("recast")
+      print("recast check")
+      print("WARNING: use only for visualization of g indices and debugging.")
+      print("In this section g vector indices showed are not indexed with respect to G and g_Q.")
+      print("Do not compare with the output of the current class method which is correctly indexed")
       b = []
       for IndexG in range(len(self.Gvectors)):
           a = []
@@ -334,25 +374,6 @@ class fold_vX():
 
 
 
-  def Get_g_Q_KDTree(self, All_g_Q_indices):
-      # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
-      g_Q_IndexCleanList = np.unique(All_g_Q_indices[:,2])
-      #print(g_Q_IndexCleanList)  
-      # Acquire all the g_Qs corresponding to the left over indices
-      g_Q = np.array([self.gvectors[i] for i in g_Q_IndexCleanList])
- 
-      start2 = time.time()  
-
-      Gplusg_Q = self.Gvectors[:,np.newaxis]+g_Q   # Gplusg_Q array of shape (number of G vectors) times (number of not doubly counted g_Q) 
-      print(Gplusg_Q.shape)
-      IndexList = []
-      for GpgQ in Gplusg_Q: # i.e. for each G
-             # point_matching(a,b,double_check) returns an array of lenght len(b) of elements p[i] such that a[p] is the one that
-             # is the closest to element b[i]
-             IndexList.append(point_matching(self.gvectors,GpgQ, double_check = False)) 
-      print("time2 : ", time.time()-start2)
-      
-      return np.array(IndexList) # returns the indices of g vectors in an array of shape (number of G vectors) times (number of g_Q)
 
    # method to do exactly the same as Getg_Q but with inline operations. It is slower than Getg_Q   
 #  def Getg_Q_heavy(self, All_g_Q_indices, threshold = 1E-6):  #inline operations take more time than nested for loops

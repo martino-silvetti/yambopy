@@ -93,24 +93,23 @@ class fold_vX():
       print("****Q points processed by YamboEm1sRotate (after rotation)*************")
       print("Number of Q points: ", len(self.Qpts))
       print("Q points (cart.)")
-#      print(self.Qpts)
+      print(self.Qpts)
       
       print("****q points read from YamboStaticScreenings***************************")
       print("Number of q points: ", len(self.qpts))
       print("q points (cart.)")
-#      print(self.qpts)
+      print(self.qpts)
       
       #print G and g 
       print("****G vectors*****")
       print("number of G vectors : ",  len(self.Gvectors))
       print("G vectors (cart)")
-#      print(self.Gvectors)
+      print(self.Gvectors)
       
       print("****g vectors*****")
       print("number of g vectors : ",  len(self.gvectors))
       print("g vectors (cart)")
-#      print(self.gvectors)
-
+      print(self.gvectors)
       #MORE PLOTS FOR DEBUGGING 
       # Q and q points, set slice_at_gamma = True to have the Q and q points for Q_z = 0 and see the Gamma point, default =  True and see the Q and q points piled up along z
 #      self.PlotReciprocal(self.Qpts, self.qpts , "Full 1BZ for unit and supercell","Unit cell","Supercell" , slice_at_gamma = True ) 
@@ -122,23 +121,38 @@ class fold_vX():
       #RUN
       # find the g_Q that are equal to Q-q and return an array of [i,j,k] = [Index Q, Index q, Index g : g = g_Q = Q-q]      
       g_QIndexMap = self.Get_Qminusq()
-      print("first list Q-q: ", g_QIndexMap.shape)   # (number of Q) times (number of q) 
-#      print(g_QIndexMap)
-      print("Q points                                q points                             g_Q    ")
+
+
+      #uncomment for debugging
+      print()
+      print("Q,q ang g corresponding to the indices found ")
       for triplet in g_QIndexMap:
-          np.savetxt(sys.stdout,([self.Qpts[triplet[0]],self.qpts[triplet[1]],self.gvectors[triplet[2]], triplet]), fmt = "%6d")
- #         print(self.Qpts[triplet[0]],self.qpts[triplet[1]],self.gvectors[triplet[2]], triplet)
-      
+           print( triplet , self.Qpts[triplet[0]],self.qpts[triplet[1]],self.gvectors[triplet[2]] )
+
+      print()
+      print("For each triplet of indices found check that Q-q-g = 0 ")
+      for triplet in g_QIndexMap:
+           print( triplet , self.Qpts[triplet[0]]-self.qpts[triplet[1]]- self.gvectors[triplet[2]])
+      print()          
+
+
+
       # find all the pairs G,g such that g = G + g_Q and return an array [i,j,k] = [Index G, Index g, Index g_Q]. 
       # Note that for a single g_Q there might be more than one (G,g) pair
-      g_QMap = self.Getg_Q(g_QIndexMap)
-      print("second list G+g_Q: ", g_QMap.shape)
-      print("G vector                                g vector                             g_Q    ")
-      for triplet in g_QMap :
-          print(self.Gvectors[triplet[0]], self.gvectors[triplet[1]], self.gvectors[triplet[2]], triplet)
-      
-      
-      
+      g_QMap = self.Getg_Q_fixed(g_QIndexMap)
+
+      #uncomment for debugging
+      print(g_QMap)
+      print("G,g ang g_Q corresponding to the indices found ")
+      for triplet in g_QMap:
+           print( triplet , self.Gvectors[triplet[0]],self.gvectors[triplet[1]],self.gvectors[triplet[2]] )
+
+      print()
+      print("For each triplet of indices found check that Q-q-g = 0 ")
+      for triplet in g_QMap:
+           print( triplet , self.Gvectors[triplet[0]]+self.gvectors[triplet[2]]-self.gvectors[triplet[1]])
+      print()          
+     
      
       
       #g_QMap_opt = self.Get_g_Q_KDTree(g_QIndexMap)
@@ -151,7 +165,7 @@ class fold_vX():
       
       
       # remap X_{g,g'}(q) = X_{G,G'}(Q) 
-#      X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
+      X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
 #      print("Remapped X shape: ")
 #      print(X.shape)
       
@@ -166,6 +180,125 @@ class fold_vX():
       #                                   here           here                                 
       
       print("Folded databases saved")
+
+  def Get_Qminusq(self, threshold = 1E-6):
+      # Acquire all the possible Q-q vectors
+      # All_Q_minus_q = np.array( [[Q-q for q in self.qpts] for Q in self.Qpts] )
+      Q_minus_q = self.Qpts[:,np.newaxis]-self.qpts #shape: (N Q points , N q points, 3 components)
+      # Compute absolute differences with broadcasting
+      QminusqDiffg = np.abs(Q_minus_q[:,:, np.newaxis] - self.gvectors) #shape: (N Q points, N q points, N g vectors, 3 components)
+      print("shape 1 ", QminusqDiffg.shape)
+      # Check the condition for all elements to be below thr
+      Condition_Qminusq_in_g = np.all(QminusqDiffg < threshold, axis=-1) #shape: (N Q points, N q points, N g vectors)
+      print("shape 2 ",Condition_Qminusq_in_g.shape) 
+     # Find the indices where the condition is true
+      IndicesQmqEqualg = np.nonzero(Condition_Qminusq_in_g) # tuple of three arrays of Q,q,g indices
+      # Stack the indices along the last axis
+      Qqg_qIndexMap = np.column_stack(IndicesQmqEqualg)# array of indices are ordered by Q,q,g
+      print("**** indices of Q, q and g=Q-q****")
+      print("Number of Q-q for which a g such that g=Q-q exists: ", Qqg_qIndexMap.shape , " should be (number of Q)")
+      print("indices of Q, q and g=Q-q")
+      print(Qqg_qIndexMap)
+      
+      # returns the set of indices ijk which associate at each Q[i],q[j] pair the g[k] corresponding to Q[i]-q[j] IF AND ONLY IF such g[k] exists
+      # This IF AND ONLY IF is why len(Qqg_qIndexMap) = N Q points and not  = (N Q points) times (N g vectors)
+      return Qqg_qIndexMap 
+
+  def Getg_Q_fixed(self, All_g_Q_indices, threshold = 1E-6):
+      # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
+      g_Q_IndexCleanList = np.unique(All_g_Q_indices[:,2])
+      print("**** indices of G, g and g_Q ****")
+      print("Number of elements in clean (with no double) Q-q list: " , g_Q_IndexCleanList.shape)
+      print("Clean list of indices of g s.t. g=Q-q:")
+      print(g_Q_IndexCleanList)  
+
+
+      # Acquire all the g_Qs corresponding to the left over indices
+      
+      g_Q = []
+      OldIndex = []
+      for i in g_Q_IndexCleanList : 
+          g_Q.append(self.gvectors[i])    #here indexing has changed
+          OldIndex.append(i)
+      g_Q = np.array(g_Q)
+      OldIndex = np.array(OldIndex)
+          
+      print(g_Q.shape)
+      print(OldIndex.shape)         
+          #here I create a list of ordered g and their indices
+          #  g_0     g_1     g_2     g_3     g_4     g_5     g_6  ...   g_nq
+          #   |       |       |       |       |       |       |   ...    |   
+          #   |       |       |       |       |       |       |   ...    |   
+          #   v       v       v       v       v       v       v   ...    v 
+          # ind_0   ind_1   ind_2   ind_3   ind_4   ind_5   ind_6 ...  ind_nq   
+          
+      print("List of G+g_Q and corresponding index of g=g_Q")
+      print("the list of indices should be equal to the one above")
+      for i in range(len(g_Q)) :
+          print("#: ",i , g_Q[i] ,OldIndex[i])
+
+      Gplusg_Q = self.Gvectors[:,np.newaxis]+g_Q   # Gplusg_Q array of shape (number of G vectors) times (number of not doubly counted g_Q) 
+      print("list of all G+g_Q")
+      for i in range (len(Gplusg_Q)) : 
+          print("G-vector ", i , ":  " , self.Gvectors[i])
+          print(Gplusg_Q[i])
+
+
+
+      start3 = time.time()
+      Ggg_QMap = []
+      for IndexG in range(len(Gplusg_Q)):
+          for Indexg_Q in range(len(Gplusg_Q[0])):  #g_Q_IndexCleanList :
+              for Indexg in range(len(self.gvectors)):
+                  if (abs(Gplusg_Q[IndexG,Indexg_Q]-self.gvectors[Indexg]) < threshold).all() :  #abs does not include the shorter ones too 
+                       Ggg_QMap.append([IndexG,Indexg,OldIndex[Indexg_Q]])
+      Ggg_QMap = np.array(Ggg_QMap)
+      print("time elapsed for the long computation: ", time.time()-start3)
+      return Ggg_QMap
+
+  def RemapX(self, IndexMap, g_QMap, UcX):
+      
+      # allocate complex X 
+      ExpandedX = np.zeros([self.Nqpts,self.Ngvectors,self.Ngvectors],dtype=np.complex64) # shape: (number of q, number of g, number of g)
+ 
+      # for each Q,q in the clean list associate the g_Q with the corresponding G,g pairs from Getg_Q
+      for IndexQ in range(self.NQpts):
+          g_Q = IndexMap[IndexQ,2] # g_Q from first list (calculated as Q-q)
+          Indexq = IndexMap[IndexQ,1]   # 
+          G_and_g = g_QMap[g_QMap[:,2] == g_Q]   # select the G,g pairs such that g-G are equal to the g_Q computed as Q-q
+          print("G_and_g = g_QMap[g_QMap[:,2] == g_Q]")
+          print(G_and_g)
+          for j1,j2 in product(range(len(G_and_g)),repeat=2):
+          #for j1 in range(len(G_and_g)):
+                #j2=j1
+              IndexG1, IndexG2 = G_and_g[j1,0], G_and_g[j2,0]
+              Indexg1, Indexg2 = G_and_g[j1,1], G_and_g[j2,1]
+              ExpandedX[Indexq,Indexg1,Indexg2] = UcX[IndexQ,IndexG1,IndexG2] 
+      return ExpandedX   
+
+
+
+
+  def Getg_Q(self, All_g_Q_indices, threshold = 1E-6):
+      # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
+      g_Q_IndexCleanList = np.unique(All_g_Q_indices[:,2])
+
+      print("Q-q clean list:")
+      print(g_Q_IndexCleanList)  
+      # Acquire all the g_Qs corresponding to the left over indices
+      g_Q = np.array([self.gvectors[i] for i in g_Q_IndexCleanList])
+      Gplusg_Q = self.Gvectors[:,np.newaxis]+g_Q   # Gplusg_Q array of shape (number of G vectors) times (number of not doubly counted g_Q) 
+      start3 = time.time()
+      Ggg_QMap = []
+      for IndexG in range(len(Gplusg_Q)):
+          for Indexg_Q in range(len(Gplusg_Q[0])):
+              for Indexg in range(len(self.gvectors)):
+                  if (abs(Gplusg_Q[IndexG,Indexg_Q]-self.gvectors[Indexg]) < threshold).all() :  #abs does not include the shorter ones too 
+                       Ggg_QMap.append([IndexG,Indexg,Indexg_Q])
+      Ggg_QMap = np.array(Ggg_QMap)
+      print("time elapsed for the long computation: ", time.time()-start3)
+
+
 
   def Get_g_Q_KDTree(self, All_g_Q_indices):
       # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
@@ -195,41 +328,8 @@ class fold_vX():
       return np.array(IndexList) # returns the indices of g vectors in an array of shape (number of G vectors) times (number of g_Q)
     
   
-  def Get_Qminusq(self, threshold = 1E-6):
-      # Acquire all the possible Q-q vectors
-      # All_Q_minus_q = np.array( [[Q-q for q in self.qpts] for Q in self.Qpts] )
-      Q_minus_q = self.Qpts[:,np.newaxis]-self.qpts #shape: (N Q points , N q points, 3 components)
-      # Compute absolute differences with broadcasting
-      QminusqDiffg = np.abs(Q_minus_q[:,:, np.newaxis] - self.gvectors) #shape: (N Q points, N q points, N g vectors, 3 components)
-      # Check the condition for all elements to be below thr
-      Condition_Qminusq_in_g = np.all(QminusqDiffg < threshold, axis=-1) #shape: (N Q points, N q points, N g vectors)
-      # Find the indices where the condition is true
-      IndicesQmqEqualg = np.nonzero(Condition_Qminusq_in_g) # tuple of three arrays of Q,q,g indices
-      # Stack the indices along the last axis
-      Qqg_qIndexMap = np.column_stack(IndicesQmqEqualg)# array of indices are ordered by Q,q,g
-#     print(Qqg_qIndexMap)
-      
-      # returns the set of indices ijk which associate at each Q[i],q[j] pair the g[k] corresponding to Q[i]-q[j] IF AND ONLY IF such g[k] exists
-      # This IF AND ONLY IF is why len(Qqg_qIndexMap) = N Q points and not  = (N Q points) times (N g vectors)
-      return Qqg_qIndexMap 
   
-  def Getg_Q(self, All_g_Q_indices, threshold = 1E-6):
-      # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
-      g_Q_IndexCleanList = np.unique(All_g_Q_indices[:,2])
-      print("elements in clean Q-q list: " , g_Q_IndexCleanList.shape)
-      print(g_Q_IndexCleanList)  
-      # Acquire all the g_Qs corresponding to the left over indices
-      g_Q = np.array([self.gvectors[i] for i in g_Q_IndexCleanList])
-      Gplusg_Q = self.Gvectors[:,np.newaxis]+g_Q   # Gplusg_Q array of shape (number of G vectors) times (number of not doubly counted g_Q) 
-      start3 = time.time()
-      Ggg_QMap = []
-      for IndexG in range(len(Gplusg_Q)):
-          for Indexg_Q in range(len(Gplusg_Q[0])):
-              for Indexg in range(len(self.gvectors)):
-                  if (abs(Gplusg_Q[IndexG,Indexg_Q]-self.gvectors[Indexg]) < threshold).all() :  #abs does not include the shorter ones too 
-                       Ggg_QMap.append([IndexG,Indexg,Indexg_Q])
-      Ggg_QMap = np.array(Ggg_QMap)
-      print("time elapsed for the long computation: ", time.time()-start3)
+
 
 
       #uncomment this section for debugging: recast the indices of the g vectors found as rows (each row is a G i.e. G+g_Q at G fixed) and columns (g_Q)
@@ -254,23 +354,7 @@ class fold_vX():
       return Ggg_QMap   # output is organized as [IndexG, Index g, Index g_Q]
 
 
-  def RemapX(self, IndexMap, g_QMap, UcX):
-      
-      # allocate complex X 
-      ExpandedX = np.zeros([self.Nqpts,self.Ngvectors,self.Ngvectors],dtype=np.complex64) # shape: (number of q, number of g, number of g)
  
-      # for each Q,q in the clean list associate the g_Q with the corresponding G,g pairs from Getg_Q
-      for IndexQ in range(self.NQpts):
-          g_Q = IndexMap[IndexQ,2] # g_Q from first list (calculated as Q-q)
-          Indexq = IndexMap[IndexQ,1]   # 
-          G_and_g = g_QMap[g_QMap[:,2] == g_Q]   # select the G,g pairs such that g-G are equal to the g_Q computed as Q-q
-          for j1,j2 in product(range(len(G_and_g)),repeat=2):
-          #for j1 in range(len(G_and_g)):
-                #j2=j1
-              IndexG1, IndexG2 = G_and_g[j1,0], G_and_g[j2,0]
-              Indexg1, Indexg2 = G_and_g[j1,1], G_and_g[j2,1]
-              ExpandedX[Indexq,Indexg1,Indexg2] = UcX[IndexQ,IndexG1,IndexG2] 
-      return ExpandedX   
 
 
   def PlotReciprocal(self, SetQ1, SetQ2, title, label1, label2, slice_at_gamma = False) : 

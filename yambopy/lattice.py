@@ -153,7 +153,7 @@ def point_matching(a,b,double_check=True,debug=False,eps=1e-8):
     start_time = time()
 
     #initialize thd kdtree
-    kdtree = cKDTree(a, leafsize=10)
+    kdtree = cKDTree(a, leafsize=100)
     map_b_to_a = []
     for xb in b:
         current_dist,index = kdtree.query(xb, k=1, distance_upper_bound=6)

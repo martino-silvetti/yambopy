@@ -142,15 +142,15 @@ class fold_vX():
       g_QMap = self.Getg_Q_fixed(g_QIndexMap)
 
       #uncomment for debugging
-      print(g_QMap)
-      print("G,g ang g_Q corresponding to the indices found ")
-      for triplet in g_QMap:
-           print( triplet , self.Gvectors[triplet[0]],self.gvectors[triplet[1]],self.gvectors[triplet[2]] )
+#      print(g_QMap)
+#      print("G,g ang g_Q corresponding to the indices found ")
+#      for triplet in g_QMap:
+#           print( triplet , self.Gvectors[triplet[0]],self.gvectors[triplet[1]],self.gvectors[triplet[2]] )
 
       print()
-      print("For each triplet of indices found check that Q-q-g = 0 ")
+      print("For each triplet of indices found check G, g_Q and that G+g_Q-g = 0 ")
       for triplet in g_QMap:
-           print( triplet , self.Gvectors[triplet[0]]+self.gvectors[triplet[2]]-self.gvectors[triplet[1]])
+           print( triplet , self.Gvectors[triplet[0]],self.gvectors[triplet[1]],self.gvectors[triplet[2]], self.Gvectors[triplet[0]]+self.gvectors[triplet[2]]-self.gvectors[triplet[1]])
       print()          
      
      
@@ -168,18 +168,54 @@ class fold_vX():
       X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
 #      print("Remapped X shape: ")
 #      print(X.shape)
+
+
+#  def PlotEm1sUc_vs_Exp(self,UcX, ExpandedX, IndexG1 = 0, IndexG2 = 0 , Indexg1=0,Indexg2=0):   # copypasted from em1sdb
+#  def PlotEm1sSc_vs_Exp(self,ScX, ExpandedX, Indexg1_orig = 0, Indexg2_orig = 0 , Indexg1_expand = 0 , Indexg2_expand = 0):   # copypasted from em1sdb       
       
       # plot X of folded unit cell vs X of supercell 
-#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 72 , 68 , 72 , 68) 
+      #self.PlotEm1sSc_vs_Exp(self.ScX,X, g1 orig , g2 orig , g1 expanded , g2 expanded)  #head
+#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 0 , 0 , 0 , 0)      #head
+#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 0 , 6 , 0 , 6)      #wing
+#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 6 , 0 , 6 , 0)      #wing
+#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 10 , 10 , 10 , 10)  #body
       
-      #plot X of folded unit cell vs X of unit cell (for the G and g that are in common)
-#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 8 , 4    ,  72   , 68 )
-      #                                  A    A        A      A      
-      #                                  |    |        |      |
-      #                               put G vector    put g vector
-      #                                   here           here                                 
+      
+      #plot X of folded unit cell vs X of unit cell (for the Q and q that are in common: #   Q in common with q : 0  2  5  6 7 12 13 62)
+      #self.PlotEm1sUc_vs_Exp(self.UcX,X, G1 , G2 , g1 , g2 )
+#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 0 , 0  ,  0   ,  0 )  #head
+#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 0 , 2  ,  0   , 10 )  #wing for Q #62 
+#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 1 , 0  ,  9   ,  0 )  #wing for Q #7
+#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 2 , 1  , 10   ,  9 )  #body for Q #13
+                               
       
       print("Folded databases saved")
+
+  def RemapX(self, IndexMap, g_QMap, UcX):
+      
+      # allocate complex X 
+      ExpandedX = np.zeros([self.Nqpts,self.Ngvectors,self.Ngvectors],dtype=np.complex64) # shape: (number of q, number of g, number of g)
+ 
+      # for each Q,q in the clean list associate the g_Q with the corresponding G,g pairs from Getg_Q
+      for IndexQ in range(self.NQpts):
+          g_Q = IndexMap[IndexQ,2] # g_Q from first list (calculated as Q-q)
+          Indexq = IndexMap[IndexQ,1]   # 
+          G_and_g = g_QMap[g_QMap[:,2] == g_Q]   # select the G,g pairs such that g-G are equal to the g_Q computed as Q-q
+          print("Q #" , IndexQ ,self.Qpts[IndexQ], IndexMap[IndexQ])
+          print("Indices of G, g and g_Q such that g_Q = current Q-q")
+          print(G_and_g)
+          print("remapped indices Q, G1, G2, q, g1, g2")
+          for j1,j2 in product(range(len(G_and_g)),repeat=2):
+          #for j1 in range(len(G_and_g)):
+                #j2=j1
+              IndexG1, IndexG2 = G_and_g[j1,0], G_and_g[j2,0]
+              Indexg1, Indexg2 = G_and_g[j1,1], G_and_g[j2,1]
+              print(IndexQ,IndexG1,IndexG2, Indexq,Indexg1,Indexg2)
+              ExpandedX[Indexq,Indexg1,Indexg2] = UcX[IndexQ,IndexG1,IndexG2]
+      print()      
+      return ExpandedX   
+#   Q in common with q : 0  2  5  6 7 12 13 62
+
 
   def Get_Qminusq(self, threshold = 1E-6):
       # Acquire all the possible Q-q vectors
@@ -187,10 +223,13 @@ class fold_vX():
       Q_minus_q = self.Qpts[:,np.newaxis]-self.qpts #shape: (N Q points , N q points, 3 components)
       # Compute absolute differences with broadcasting
       QminusqDiffg = np.abs(Q_minus_q[:,:, np.newaxis] - self.gvectors) #shape: (N Q points, N q points, N g vectors, 3 components)
-      print("shape 1 ", QminusqDiffg.shape)
+      print("----------------------------------")
+      print("*** Debugging step 1 ***")
+      print("----------------------------------")
+      print("shape Q-q-g (N Q points, N q points, N g vectors, 3 components)", QminusqDiffg.shape)
       # Check the condition for all elements to be below thr
       Condition_Qminusq_in_g = np.all(QminusqDiffg < threshold, axis=-1) #shape: (N Q points, N q points, N g vectors)
-      print("shape 2 ",Condition_Qminusq_in_g.shape) 
+      print("shape condition for which Q-q-g = 0 (should be (N Q points, N q points, N g vectors)) ",Condition_Qminusq_in_g.shape) 
      # Find the indices where the condition is true
       IndicesQmqEqualg = np.nonzero(Condition_Qminusq_in_g) # tuple of three arrays of Q,q,g indices
       # Stack the indices along the last axis
@@ -232,17 +271,22 @@ class fold_vX():
           #   v       v       v       v       v       v       v   ...    v 
           # ind_0   ind_1   ind_2   ind_3   ind_4   ind_5   ind_6 ...  ind_nq   
           
-      print("List of G+g_Q and corresponding index of g=g_Q")
-      print("the list of indices should be equal to the one above")
-      for i in range(len(g_Q)) :
-          print("#: ",i , g_Q[i] ,OldIndex[i])
+#      print("List of G+g_Q and corresponding index of g=g_Q")
+#      print("the list of indices should be equal to the one above")
+ #     for i in range(len(g_Q)) :
+ #         print("#: ",i , g_Q[i] ,OldIndex[i])
 
       Gplusg_Q = self.Gvectors[:,np.newaxis]+g_Q   # Gplusg_Q array of shape (number of G vectors) times (number of not doubly counted g_Q) 
+      print("----------------------------------")
+      print("*** Debugging step 2 ***")
+      print("----------------------------------")
       print("list of all G+g_Q")
-      for i in range (len(Gplusg_Q)) : 
-          print("G-vector ", i , ":  " , self.Gvectors[i])
-          print(Gplusg_Q[i])
-
+      print("# G    Index G  g_Q    dummy g_Q index --> True g_Q index    G + g_Q      G+g_Q-G     g: g=g_Q   ")
+      print("10 columns: check that col 10 = col 9 , col 3 + col 4 = col 8 , col 9 = col 4")   
+      for i in range(len(Gplusg_Q)) :
+          for j in range(len(Gplusg_Q[i])):
+              print("G-vector ", i , self.Gvectors[i] , g_Q[j] , j,"-->", OldIndex[j] , Gplusg_Q[i,j], Gplusg_Q[i,j]-self.Gvectors[i],self.gvectors[OldIndex[j]] )
+          print()
 
 
       start3 = time.time()
@@ -255,26 +299,6 @@ class fold_vX():
       Ggg_QMap = np.array(Ggg_QMap)
       print("time elapsed for the long computation: ", time.time()-start3)
       return Ggg_QMap
-
-  def RemapX(self, IndexMap, g_QMap, UcX):
-      
-      # allocate complex X 
-      ExpandedX = np.zeros([self.Nqpts,self.Ngvectors,self.Ngvectors],dtype=np.complex64) # shape: (number of q, number of g, number of g)
- 
-      # for each Q,q in the clean list associate the g_Q with the corresponding G,g pairs from Getg_Q
-      for IndexQ in range(self.NQpts):
-          g_Q = IndexMap[IndexQ,2] # g_Q from first list (calculated as Q-q)
-          Indexq = IndexMap[IndexQ,1]   # 
-          G_and_g = g_QMap[g_QMap[:,2] == g_Q]   # select the G,g pairs such that g-G are equal to the g_Q computed as Q-q
-          print("G_and_g = g_QMap[g_QMap[:,2] == g_Q]")
-          print(G_and_g)
-          for j1,j2 in product(range(len(G_and_g)),repeat=2):
-          #for j1 in range(len(G_and_g)):
-                #j2=j1
-              IndexG1, IndexG2 = G_and_g[j1,0], G_and_g[j2,0]
-              Indexg1, Indexg2 = G_and_g[j1,1], G_and_g[j2,1]
-              ExpandedX[Indexq,Indexg1,Indexg2] = UcX[IndexQ,IndexG1,IndexG2] 
-      return ExpandedX   
 
 
 

@@ -74,7 +74,10 @@ class fold_vX():
       # make available the G and Q arrays for the Uc epsilon 
       self.Gvectors = UcFull1BZStaticScreening.gvectors   # G vectors in cartesian coordinates 
       self.NGvectors = UcFull1BZStaticScreening.ngvectors
-      self.Qpts = UcFull1BZStaticScreening.qpoints   # in cartesian coordinates
+      if ExpandUc == True :   #if Uc calculation is with symmetries use the Q point list after rotation
+          self.Qpts = UcFull1BZStaticScreening.qpoints   # in cartesian coordinates
+      elif ExpandUc == False:  #if Uc calculation is without symmetries use the Q point list read from lattice database
+          self.qpts = UcFull1BZStaticScreening.car_qpoints
       self.NQpts = UcFull1BZStaticScreening.nqpoints
       self.UcX = UcFull1BZStaticScreening.X
       # At this point I have X_{G,G'}(Q) for the Uc with a database fragment for each Q
@@ -82,7 +85,10 @@ class fold_vX():
       # make available the g and q arrays for the Sc epsilon 
       self.gvectors = ScFull1BZStaticScreening.gvectors   # g vectors in cartesian coordinates
       self.Ngvectors = ScFull1BZStaticScreening.ngvectors
-      self.qpts = ScFull1BZStaticScreening.car_qpoints
+      if ExpandSc == True :   #if Sc calculation is with symmetries use the Q point list after rotation
+          self.qpts = ScFull1BZStaticScreening.qpoints
+      elif ExpandSc == False:   #if Sc calculation is without symmetries use the Q point list read from lattice database
+          self.qpts = ScFull1BZStaticScreening.car_qpoints
       self.Nqpts = ScFull1BZStaticScreening.nqpoints
       self.ScX = ScFull1BZStaticScreening.X
       # At this point I have the number of g vectors and q points for the Sc
@@ -110,7 +116,9 @@ class fold_vX():
       print("number of g vectors : ",  len(self.gvectors))
       print("g vectors (cart)")
       print(self.gvectors)
-      #MORE PLOTS FOR DEBUGGING 
+ 
+
+     #MORE PLOTS FOR DEBUGGING 
       # Q and q points, set slice_at_gamma = True to have the Q and q points for Q_z = 0 and see the Gamma point, default =  True and see the Q and q points piled up along z
 #      self.PlotReciprocal(self.Qpts, self.qpts , "Full 1BZ for unit and supercell","Unit cell","Supercell" , slice_at_gamma = True ) 
 #      self.PlotReciprocal(self.gvectors,self.Gvectors, "G and g vectors", "g-vectors","G vectors")⎄
@@ -119,10 +127,11 @@ class fold_vX():
 
 
       #RUN
-      # find the g_Q that are equal to Q-q and return an array of [i,j,k] = [Index Q, Index q, Index g : g = g_Q = Q-q]      
+      # 1) find the g_Q that are equal to Q-q and return an array of [i,j,k] = [Index Q, Index q, Index g : g = g_Q = Q-q]      
       g_QIndexMap = self.Get_Qminusq()
 
 
+      #PRINT INFOS ABOUT Q, q AND g=Q-q VECTORS
       #uncomment for debugging
       print()
       print("Q,q ang g corresponding to the indices found ")
@@ -137,16 +146,12 @@ class fold_vX():
 
 
 
-      # find all the pairs G,g such that g = G + g_Q and return an array [i,j,k] = [Index G, Index g, Index g_Q]. 
+      # 2) find all the pairs G,g such that g = G + g_Q and return an array [i,j,k] = [Index G, Index g, Index g_Q]. 
       # Note that for a single g_Q there might be more than one (G,g) pair
       g_QMap = self.Getg_Q_fixed(g_QIndexMap)
 
+      #PRINT INFOS ABOUT G, g AND g=G+g_Q VECTORS 
       #uncomment for debugging
-#      print(g_QMap)
-#      print("G,g ang g_Q corresponding to the indices found ")
-#      for triplet in g_QMap:
-#           print( triplet , self.Gvectors[triplet[0]],self.gvectors[triplet[1]],self.gvectors[triplet[2]] )
-
       print()
       print("For each triplet of indices found check G, g_Q and that G+g_Q-g = 0 ")
       for triplet in g_QMap:
@@ -164,7 +169,7 @@ class fold_vX():
 #     print(g_QMap)
       
       
-      # remap X_{g,g'}(q) = X_{G,G'}(Q) 
+      # 3) remap X_{g,g'}(q) = X_{G,G'}(Q) 
       X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
 #      print("Remapped X shape: ")
 #      print(X.shape)

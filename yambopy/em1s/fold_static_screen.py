@@ -8,15 +8,21 @@ from itertools import product
 import math
 import bisect
 import time
-
+from netCDF4 import Dataset
 
 #Re-implement Paleari's algorithm to fold the static screening of the primitive cell to the smaller supercell 1BZ'
 # WARNING: Please use cartesian coordinates
 
 class fold_vX():
 
-  def __init__(self, UcLatticePath, UcScreeningPath, ScLatticePath, ScScreeningPath, UcRotatedXOutPath, ScRotatedXOutPath, UcLattDB ="ns.db1",UcEm1sDB = "ndb.em1s" ,ScLattDB = "ns.db1" ,ScEm1sDB = "ndb.em1s", ExpandUc=True, ExpandSc=True):
+  def __init__(self, UcLatticePath, UcScreeningPath, ScLatticePath, ScScreeningPath, UcRotatedXOutPath, ScRotatedXOutPath, NewScRotatedXOutPath, UcLattDB ="ns.db1",UcEm1sDB = "ndb.em1s" ,ScLattDB = "ns.db1" ,ScEm1sDB = "ndb.em1s", ExpandUc=True, ExpandSc=False):
  
+      #MAKE ACCESSIBLE TO SUBROUTINES SEVERAL INPUT VARIABLES
+      self.ScScreeningPath = ScScreeningPath 
+      self.NewScRotatedXOutPath = NewScRotatedXOutPath
+      self.ScEm1sDB = ScEm1sDB
+      
+      
       #READ YAMBO DATABASES
       #read uc lattice points and screening database
       UcLattice = YamboLatticeDB.from_db_file(filename = UcLatticePath+UcLattDB, Expand=True)
@@ -170,38 +176,88 @@ class fold_vX():
       
       
       # 3) remap X_{g,g'}(q) = X_{G,G'}(Q) 
-      X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
-#      print("Remapped X shape: ")
-#      print(X.shape)
+      self.X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
+      print("Remapped X shape: ")
+      print(self.X.shape) # (8,35,35)
 
+      print(self.X[0])
 
 #  def PlotEm1sUc_vs_Exp(self,UcX, ExpandedX, IndexG1 = 0, IndexG2 = 0 , Indexg1=0,Indexg2=0):   # copypasted from em1sdb
 #  def PlotEm1sSc_vs_Exp(self,ScX, ExpandedX, Indexg1_orig = 0, Indexg2_orig = 0 , Indexg1_expand = 0 , Indexg2_expand = 0):   # copypasted from em1sdb       
       
       # plot X of folded unit cell vs X of supercell 
-      #self.PlotEm1sSc_vs_Exp(self.ScX,X, g1 orig , g2 orig , g1 expanded , g2 expanded)  #head
-#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 0 , 0 , 0 , 0)      #head
-#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 0 , 6 , 0 , 6)      #wing
-#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 6 , 0 , 6 , 0)      #wing
-#      self.PlotEm1sSc_vs_Exp(self.ScX,X, 10 , 10 , 10 , 10)  #body
+      #self.PlotEm1sSc_vs_Exp(self.ScX,self.X, g1 orig , g2 orig , g1 expanded , g2 expanded)  #head
+#      self.PlotEm1sSc_vs_Exp(self.ScX,self.X, 0 , 0 , 0 , 0)      #head
+#      self.PlotEm1sSc_vs_Exp(self.ScX,self.X, 0 , 6 , 0 , 6)      #wing
+#      self.PlotEm1sSc_vs_Exp(self.ScX,self.X, 6 , 0 , 6 , 0)      #wing
+#      self.PlotEm1sSc_vs_Exp(self.ScX,self.X, 10 , 10 , 10 , 10)  #body
       
       
       #plot X of folded unit cell vs X of unit cell (for the Q and q that are in common: #   Q in common with q : 0  2  5  6 7 12 13 62)
-      #self.PlotEm1sUc_vs_Exp(self.UcX,X, G1 , G2 , g1 , g2 )
-#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 0 , 0  ,  0   ,  0 )  #head
-#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 0 , 2  ,  0   , 10 )  #wing for Q #62 
-#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 1 , 0  ,  9   ,  0 )  #wing for Q #7
-#      self.PlotEm1sUc_vs_Exp(self.UcX,X, 2 , 1  , 10   ,  9 )  #body for Q #13
+      #self.PlotEm1sUc_vs_Exp(self.UcX,self.X, G1 , G2 , g1 , g2 )
+#      self.PlotEm1sUc_vs_Exp(self.UcX,self.X, 0 , 0  ,  0   ,  0 )  #head
+#      self.PlotEm1sUc_vs_Exp(self.UcX,self.X, 0 , 2  ,  0   , 10 )  #wing for Q #62 
+#      self.PlotEm1sUc_vs_Exp(self.UcX,self.X, 1 , 0  ,  9   ,  0 )  #wing for Q #7
+#      self.PlotEm1sUc_vs_Exp(self.UcX,self.X, 2 , 1  , 10   ,  9 )  #body for Q #13
                                
+ 
+      # (4) Select only X(iq+g1,iq+g2)
+#      self.sqpts, self.isqpts_ind, self.in_sIBZ = self.expand_qpts(yslat,self.isqpts)
+
+
+#      self.RemappedX = np.array([ self.X[q] for q in range(self.sqq) if self.in_sIBZ[q]==1 ])
+
+      # here we need to overwrite with the new remapped em1s the database of the supercell calculation 
+      # the supercell calculation 
+      # (5) Save new em1s database. It has the same serial number as the sc database.
+      # in general the switch for the Sc screening database above between a calculation with (expand the points) and without the symmetries
+      # (use the screening database as it is read) should already tell the program how to save the database. By the way in case of a
+      # calculation with symmetries em1s_rotate is used and it reports a warning about possible conflicts in the version of 
+      # the netCDF database save procedure. Maybe the NetCDF saving procedure in the class em1sdb is safer, so I suggest to use a 
+      # no symmetry calculation
+
+
+      if ExpandSc == False :
+          Db2BeOverWritten = ScScreeningPath
+      elif ExpandSc == True :
+          Db2BeOverWritten = ScRotatedXOutPath
+          
+          
+      self.SaveNewXDB(self.X,Db2BeOverWritten ,NewScRotatedXOutPath)
       
-      print("Folded databases saved")
+      print('Database of folded em1s saved')
+
+
+
+#       """
+#        Save the database
+#        """
+#        if os.path.isdir(path): shutil.rmtree(path)
+#        os.mkdir(path)
+
+        #copy all the files
+#        oldpath = self.save
+#        filename = self.filename
+#        shutil.copyfile("%s/%s"%(oldpath,filename),"%s/%s"%(path,filename))
+#        for nq in range(self.nqpoints):
+#            fname = "%s_fragment_%d"%(filename,nq+1)
+#            shutil.copyfile("%s/%s"%(oldpath,fname),"%s/%s"%(path,fname))
+
+        #edit with the new wfs
+#        X = self.X
+#        for nq in range(self.nqpoints):
+#            fname = "%s_fragment_%d"%(filename,nq+1)
+#            database = Dataset("%s/%s"%(path,fname),'r+')
+#            database.variables['X_Q_%d'%(nq+1)][0,0,:] = X[nq].real
+#            database.variables['X_Q_%d'%(nq+1)][0,1,:] = X[nq].imag
+#            database.close()
 
   def RemapX(self, IndexMap, g_QMap, UcX):
       
       # allocate complex X 
       ExpandedX = np.zeros([self.Nqpts,self.Ngvectors,self.Ngvectors],dtype=np.complex64) # shape: (number of q, number of g, number of g)
  
-      # for each Q,q in the clean list associate the g_Q with the corresponding G,g pairs from Getg_Q
+      # for each Q,q in the clean list associate the g_Q with the corresponding G,g pairs from Getg_QScEm1sDB
       for IndexQ in range(self.NQpts):
           g_Q = IndexMap[IndexQ,2] # g_Q from first list (calculated as Q-q)
           Indexq = IndexMap[IndexQ,1]   # 
@@ -209,13 +265,13 @@ class fold_vX():
           print("Q #" , IndexQ ,self.Qpts[IndexQ], IndexMap[IndexQ])
           print("Indices of G, g and g_Q such that g_Q = current Q-q")
           print(G_and_g)
-          print("remapped indices Q, G1, G2, q, g1, g2")
+#          print("remapped indices Q, G1, G2, q, g1, g2")
           for j1,j2 in product(range(len(G_and_g)),repeat=2):
           #for j1 in range(len(G_and_g)):
                 #j2=j1
               IndexG1, IndexG2 = G_and_g[j1,0], G_and_g[j2,0]
               Indexg1, Indexg2 = G_and_g[j1,1], G_and_g[j2,1]
-              print(IndexQ,IndexG1,IndexG2, Indexq,Indexg1,Indexg2)
+#              print(IndexQ,IndexG1,IndexG2, Indexq,Indexg1,Indexg2)
               ExpandedX[Indexq,Indexg1,Indexg2] = UcX[IndexQ,IndexG1,IndexG2]
       print()      
       return ExpandedX   
@@ -248,7 +304,7 @@ class fold_vX():
       # This IF AND ONLY IF is why len(Qqg_qIndexMap) = N Q points and not  = (N Q points) times (N g vectors)
       return Qqg_qIndexMap 
 
-  def Getg_Q_fixed(self, All_g_Q_indices, threshold = 1E-6):
+  def Getg_Q_fixed(self, All_g_Q_indices, threshold = 1E-5):
       # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
       g_Q_IndexCleanList = np.unique(All_g_Q_indices[:,2])
       print("**** indices of G, g and g_Q ****")
@@ -285,8 +341,8 @@ class fold_vX():
       print("----------------------------------")
       print("*** Debugging step 2 ***")
       print("----------------------------------")
-      print("list of all G+g_Q")
-      print("# G    Index G  g_Q    dummy g_Q index --> True g_Q index    G + g_Q      G+g_Q-G     g: g=g_Q   ")
+      print("list of all g=G+g_Q")
+      print("# G    g_Q-Index   G    g_Q    dummy g_Q index --> True g_Q index    G + g_Q      G+g_Q-G     g: g=g_Q   ")
       print("10 columns: check that col 10 = col 9 , col 3 + col 4 = col 8 , col 9 = col 4")   
       for i in range(len(Gplusg_Q)) :
           for j in range(len(Gplusg_Q[i])):
@@ -304,6 +360,33 @@ class fold_vX():
       Ggg_QMap = np.array(Ggg_QMap)
       print("time elapsed for the long computation: ", time.time()-start3)
       return Ggg_QMap
+
+
+  def SaveNewXDB(self,InputX, Db2BeOverWritten , OutputPath) :
+        """
+        Save the database, constructed from saveDBS in em1sdb
+        """
+        if os.path.isdir(OutputPath): shutil.rmtree(OutputPath)
+        os.mkdir(OutputPath)
+
+        # recast X in array of X[q] of the different q
+#       self.new_x = np.array([ self.X[q] for q in range(self.sqq) if self.in_sIBZ[q]==1 ])     
+#        NewX = np.array([ InputX[q] for q in range(self.Nqpts) if self.in_sIBZ[q]==1 ])
+
+        # copy ndb.em1s
+        shutil.copyfile("%s/%s"%(Db2BeOverWritten,self.ScEm1sDB),"%s/%s"%(OutputPath,self.ScEm1sDB))
+        # copy em1s fragments, one per q point
+        for Indexq in range(self.Nqpts):
+            FragmentName = "%s_fragment_%d"%(self.ScEm1sDB,Indexq+1)
+            shutil.copyfile("%s/%s"%(Db2BeOverWritten,FragmentName),"%s/%s"%(OutputPath,FragmentName))
+
+        #overwrite new X in the copied databases
+        for Indexq in range(self.Nqpts):
+            FragmentName = "%s_fragment_%d"%(self.ScEm1sDB,Indexq+1)
+            database = Dataset("%s/%s"%(OutputPath,FragmentName),'r+')
+            database.variables['X_Q_%d'%(Indexq+1)][0,:,:,0] = InputX[Indexq].real
+            database.variables['X_Q_%d'%(Indexq+1)][0,:,:,1] = InputX[Indexq].imag
+            database.close()
 
 
 

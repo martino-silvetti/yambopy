@@ -155,6 +155,7 @@ class fold_vX():
       # 2) find all the pairs G,g such that g = G + g_Q and return an array [i,j,k] = [Index G, Index g, Index g_Q]. 
       # Note that for a single g_Q there might be more than one (G,g) pair
       g_QMap = self.Getg_Q_fixed(g_QIndexMap)
+      g_QMap2 = self.Getg_Q_KDTree(g_QIndexMap)
 
       #PRINT INFOS ABOUT G, g AND g=G+g_Q VECTORS 
       #uncomment for debugging
@@ -180,7 +181,7 @@ class fold_vX():
       print("Remapped X shape: ")
       print(self.X.shape) # (8,35,35)
 
-      print(self.X[0])
+#      print(self.X[0])
 
 #  def PlotEm1sUc_vs_Exp(self,UcX, ExpandedX, IndexG1 = 0, IndexG2 = 0 , Indexg1=0,Indexg2=0):   # copypasted from em1sdb
 #  def PlotEm1sSc_vs_Exp(self,ScX, ExpandedX, Indexg1_orig = 0, Indexg2_orig = 0 , Indexg1_expand = 0 , Indexg2_expand = 0):   # copypasted from em1sdb       
@@ -304,7 +305,43 @@ class fold_vX():
       # This IF AND ONLY IF is why len(Qqg_qIndexMap) = N Q points and not  = (N Q points) times (N g vectors)
       return Qqg_qIndexMap 
 
-  def Getg_Q_fixed(self, All_g_Q_indices, threshold = 1E-5):
+  def Getg_Q_KDTree(self, All_g_Q_indices, threshold = 1E-6) :
+     # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
+      g_Q_IndexCleanList = np.unique(All_g_Q_indices[:,2])
+      print("**** indices of G, g and g_Q ****")
+      print("Number of elements in clean (with no double) Q-q list: " , g_Q_IndexCleanList.shape)
+      print("Clean list of indices of g s.t. g=Q-q:")
+      print(g_Q_IndexCleanList)  
+      # Acquire all the g_Qs corresponding to the left over indices
+      g_Q = np.array( [ self.gvectors[Indexg] for Indexg in g_Q_IndexCleanList])      
+      
+      #allocate list of g and their indices such that g=G+g_Q
+      g_list = np.zeros([self.NGvectors,len(g_Q_IndexCleanList),3])
+      g_indices = np.zeros([self.NGvectors,len(g_Q_IndexCleanList)],dtype=np.int64)
+
+      for IndexG in range(self.NGvectors) : 
+          g_list[IndexG]=self.Gvectors[IndexG]+g_Q    #build the list of tilde{g}=G+g_Q
+          g_indices[IndexG] = point_matching(self.gvectors,g_list[IndexG],double_check=False)   # find which is the index of the g s.t. g = \tilde{g}  
+
+      print(g_indices)
+      
+      GgMap = []
+      for IndexG,Index_g_Q in product(range(self.NGvectors),range(len(g_Q_IndexCleanList))):
+          #This call is the heaviest part of the script: it should be made faster somehow 
+          if self.vecs_find(g_list[IndexG,Index_g_Q])==True: GgMap.append([IndexG,g_Q_IndexCleanList[Index_g_Q],g_indices[IndexG,Index_g_Q]])
+      GgMap = np.array(GgMap)
+      print("GgMap:")
+      print(GgMap)
+      return GgMap
+  
+  def vecs_find(self,vec1):
+      check = False
+      for g in self.gvectors:
+          if np.isclose(g,vec1,rtol=1e-05,atol=1e-05).all(): check = True 
+      return check
+    
+
+  def Getg_Q_fixed(self, All_g_Q_indices, threshold = 1E-6):
       # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q
       g_Q_IndexCleanList = np.unique(All_g_Q_indices[:,2])
       print("**** indices of G, g and g_Q ****")
@@ -346,20 +383,26 @@ class fold_vX():
       print("10 columns: check that col 10 = col 9 , col 3 + col 4 = col 8 , col 9 = col 4")   
       for i in range(len(Gplusg_Q)) :
           for j in range(len(Gplusg_Q[i])):
-              print("G-vector ", i , self.Gvectors[i] , g_Q[j] , j,"-->", OldIndex[j] , Gplusg_Q[i,j], Gplusg_Q[i,j]-self.Gvectors[i],self.gvectors[OldIndex[j]] )
+              print("G-vector ", i , self.Gvectors[i] , g_Q[j] , j,"-->", OldIndex[j] , Gplusg_Q[i,j], Gplusg_Q[i,j]-self.Gvectors[i],self.gvectors[g_Q_IndexCleanList[j]] )
           print()
 
 
       start3 = time.time()
       Ggg_QMap = []
       for IndexG in range(len(Gplusg_Q)):
-          for Indexg_Q in range(len(Gplusg_Q[0])):  #g_Q_IndexCleanList :
+          for Indexg_Q in range(len(Gplusg_Q[IndexG])):  #g_Q_IndexCleanList :
               for Indexg in range(len(self.gvectors)):
+#                  if (abs(Gplusg_Q[IndexG,Indexg_Q]-self.gvectors[Indexg]) < threshold).all() :  #abs does not include the shorter ones too 
                   if (abs(Gplusg_Q[IndexG,Indexg_Q]-self.gvectors[Indexg]) < threshold).all() :  #abs does not include the shorter ones too 
-                       Ggg_QMap.append([IndexG,Indexg,OldIndex[Indexg_Q]])
+                       Ggg_QMap.append([IndexG,Indexg,g_Q_IndexCleanList[Indexg_Q]])
       Ggg_QMap = np.array(Ggg_QMap)
       print("time elapsed for the long computation: ", time.time()-start3)
+      print("shape of Ggg_Q map: ",  Ggg_QMap.shape)
       return Ggg_QMap
+
+
+
+
 
 
   def SaveNewXDB(self,InputX, Db2BeOverWritten , OutputPath) :
@@ -410,7 +453,7 @@ class fold_vX():
       Ggg_QMap = np.array(Ggg_QMap)
       print("time elapsed for the long computation: ", time.time()-start3)
 
-
+#           g_indices[G] = point_matching(self.sgvectors,g_list[G],double_check=False)
 
   def Get_g_Q_KDTree(self, All_g_Q_indices):
       # Eliminate all the doubly counted indices of g_Qs that connect more than two pairs of Q-q

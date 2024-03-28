@@ -181,6 +181,9 @@ class fold_vX():
       print("Remapped X shape: ")
       print(self.X.shape) # (8,35,35)
 
+      self.CompareX(0,self.ScX ,self.X)
+
+
 #      print(self.X[0])
 
 #  def PlotEm1sUc_vs_Exp(self,UcX, ExpandedX, IndexG1 = 0, IndexG2 = 0 , Indexg1=0,Indexg2=0):   # copypasted from em1sdb
@@ -400,8 +403,44 @@ class fold_vX():
       print("shape of Ggg_Q map: ",  Ggg_QMap.shape)
       return Ggg_QMap
 
+  def CompareX(self, FragmentIndex, OriginalX, ExpandedX) :
+      ShapeOriginal = OriginalX.shape
+      ShapeExpanded = ExpandedX.shape
+      if ShapeOriginal != ShapeExpanded : raise("G grids for the original and expanded X not compatible. Comparison impossible")
 
+      #get real parts extremal values for colorbar
+      MinReal = min(np.min(OriginalX.real),np.min(ExpandedX.real))
+      MaxReal = max(np.max(OriginalX.real),np.max(ExpandedX.real))
+      
+      #get imaginary parts extremal values for colorbar
+      MinImag = min(np.min(OriginalX.imag),np.min(ExpandedX.imag))
+      MaxImag = max(np.max(OriginalX.imag),np.max(ExpandedX.imag))
 
+      plt.figure(figsize=(7,7))     
+      RealExpandedX = plt.imshow( ExpandedX[FragmentIndex].real , cmap='viridis', vmin = MinReal ,  vmax = MaxReal) 
+      plt.title("Real part of expanded X at Q = {}".format(FragmentIndex))
+      plt.colorbar()
+      plt.show()
+      
+      plt.figure(figsize=(7,7))     
+      ImagExpandedX = plt.imshow( ExpandedX[FragmentIndex].imag , cmap='viridis' , vmin = MinImag ,  vmax = MaxImag)
+      plt.title("Imaginary part of expanded X at Q = {}".format(FragmentIndex))
+      plt.colorbar()
+      plt.show()
+
+      plt.figure(figsize=(7,7))     
+      RealExpandedX = plt.imshow( OriginalX[FragmentIndex].real , cmap='viridis', vmin = MinReal ,  vmax = MaxReal) 
+      plt.title("Real part of original X at Q = {}".format(FragmentIndex))
+      plt.colorbar()
+      plt.show()
+      
+      plt.figure(figsize=(7,7))     
+      ImagExpandedX = plt.imshow( OriginalX[FragmentIndex].imag , cmap='viridis' , vmin = MinImag ,  vmax = MaxImag)
+      plt.title("Imaginary part of original X at Q = {}".format(FragmentIndex))
+      plt.colorbar()
+      plt.show()
+      
+      return
 
 
 

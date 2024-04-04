@@ -139,31 +139,32 @@ class fold_vX():
 
       #PRINT INFOS ABOUT Q, q AND g=Q-q VECTORS
       #uncomment for debugging
-      print()
-      print("Q,q ang g corresponding to the indices found ")
-      for triplet in g_QIndexMap:
-           print( triplet , self.Qpts[triplet[0]],self.qpts[triplet[1]],self.gvectors[triplet[2]] )
+#      print()
+#      print("Q,q ang g corresponding to the indices found ")
+#      for triplet in g_QIndexMap:
+#           print( triplet , self.Qpts[triplet[0]],self.qpts[triplet[1]],self.gvectors[triplet[2]] )
 
-      print()
-      print("For each triplet of indices found check that Q-q-g = 0 ")
-      for triplet in g_QIndexMap:
-           print( triplet , self.Qpts[triplet[0]]-self.qpts[triplet[1]]- self.gvectors[triplet[2]])
-      print()          
+#      print()
+#      print("For each triplet of indices found check that Q-q-g = 0 ")
+#      for triplet in g_QIndexMap:
+#           print( triplet , self.Qpts[triplet[0]]-self.qpts[triplet[1]]- self.gvectors[triplet[2]])
+#      print()          
 
 
 
       # 2) find all the pairs G,g such that g = G + g_Q and return an array [i,j,k] = [Index G, Index g, Index g_Q]. 
       # Note that for a single g_Q there might be more than one (G,g) pair
       g_QMap = self.Getg_Q_fixed(g_QIndexMap)
-      g_QMap2 = self.Getg_Q_KDTree(g_QIndexMap)
+      print(g_QMap)
+#      g_QMap2 = self.Getg_Q_KDTree(g_QIndexMap)
 
       #PRINT INFOS ABOUT G, g AND g=G+g_Q VECTORS 
       #uncomment for debugging
-      print()
-      print("For each triplet of indices found check G, g_Q and that G+g_Q-g = 0 ")
-      for triplet in g_QMap:
-           print( triplet , self.Gvectors[triplet[0]],self.gvectors[triplet[1]],self.gvectors[triplet[2]], self.Gvectors[triplet[0]]+self.gvectors[triplet[2]]-self.gvectors[triplet[1]])
-      print()          
+#      print()
+#      print("For each triplet of indices found check G, g_Q and that G+g_Q-g = 0 ")
+#      for triplet in g_QMap:
+#           print( triplet , self.Gvectors[triplet[0]],self.gvectors[triplet[1]],self.gvectors[triplet[2]], self.Gvectors[triplet[0]]+self.gvectors[triplet[2]]-self.gvectors[triplet[1]])
+#      print()          
      
      
       
@@ -177,11 +178,20 @@ class fold_vX():
       
       
       # 3) remap X_{g,g'}(q) = X_{G,G'}(Q) 
-      self.X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
+
+      QqGgMap = self.Remap(g_QIndexMap,g_QMap,self.UcX)
+      self.X = self.BuildX(QqGgMap, self.UcX)
+          
+          
+#      self.X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
       print("Remapped X shape: ")
       print(self.X.shape) # (8,35,35)
 
-      self.CompareX(0,self.ScX ,self.X)
+
+      
+#      BlockSize = 
+      for indexq in range(1)  :  #(self.Nqpts):
+          self.CompareX(indexq,self.ScX ,self.X) # a value between 1 and 2 should be used
 
 
 #      print(self.X[0])
@@ -226,7 +236,7 @@ class fold_vX():
       elif ExpandSc == True :
           Db2BeOverWritten = ScRotatedXOutPath
           
-          
+         
       self.SaveNewXDB(self.X,Db2BeOverWritten ,NewScRotatedXOutPath)
       
       print('Database of folded em1s saved')
@@ -259,9 +269,11 @@ class fold_vX():
   def RemapX(self, IndexMap, g_QMap, UcX):
       
       # allocate complex X 
-      ExpandedX = np.zeros([self.Nqpts,self.Ngvectors,self.Ngvectors],dtype=np.complex64) # shape: (number of q, number of g, number of g)
- 
+#⎄      ExpandedX = np.zeros([self.Nqpts,self.Ngvectors,self.Ngvectors],dtype=np.complex64) # shape: (number of q, number of g, number of g)
+      ExpandedX = np.full((self.Nqpts,self.Ngvectors,self.Ngvectors),-10-10j) # shape: (number of q, number of g, number of g)
+
       # for each Q,q in the clean list associate the g_Q with the corresponding G,g pairs from Getg_QScEm1sDB
+      print("*** Debugging step 3 ***")
       for IndexQ in range(self.NQpts):
           g_Q = IndexMap[IndexQ,2] # g_Q from first list (calculated as Q-q)
           Indexq = IndexMap[IndexQ,1]   # 
@@ -273,6 +285,7 @@ class fold_vX():
           for j1,j2 in product(range(len(G_and_g)),repeat=2):
           #for j1 in range(len(G_and_g)):
                 #j2=j1
+#              print(j1,j2)
               IndexG1, IndexG2 = G_and_g[j1,0], G_and_g[j2,0]
               Indexg1, Indexg2 = G_and_g[j1,1], G_and_g[j2,1]
 #              print(IndexQ,IndexG1,IndexG2, Indexq,Indexg1,Indexg2)
@@ -280,6 +293,94 @@ class fold_vX():
       print()      
       return ExpandedX   
 #   Q in common with q : 0  2  5  6 7 12 13 62
+
+
+  def Remap(self, IndexMap, g_QMap, UcX):
+      Map = []
+      for IndexQ in range(self.NQpts):
+          print("Q #",IndexQ)
+          g_Q = IndexMap[IndexQ,2] # g_Q from first list (calculated as Q-q)
+          Indexq = IndexMap[IndexQ,1]   # 
+          G_and_g = g_QMap[g_QMap[:,2] == g_Q]   # select the G,g pairs such that g-G are equal to the g_Q computed as Q-q
+          tmp_map = []     
+#          tmp_map = np.array([[IndexQ, Indexq, element[0],element[1]] for element in G_and_g] )
+          for element in G_and_g :
+              tmp_map.append([IndexQ, Indexq, element[0],element[1]])
+          Map.append(tmp_map)
+          MapList = []
+          for element in Map :
+              for element2 in element :
+                 MapList.append(np.array(element2))
+      MapList = np.array(MapList)
+      print(Map)
+      print()
+      #Map list is (index Q , index q , index G, index g)
+      print(MapList)
+      return(MapList)
+
+  def BuildX(self, MapList, UcX):
+      ExpandedX = np.full((self.Nqpts,self.Ngvectors,self.Ngvectors), 0-0j) # shape: (number of q, number of g, number of g)
+      for fourtuple1 in MapList:
+          for fourtuple2 in MapList :
+              if fourtuple1[1] == fourtuple2[1] and fourtuple1[0] == fourtuple2[0]:
+                  ExpandedX[fourtuple1[1],fourtuple1[3],fourtuple2[3]] = UcX[fourtuple1[0],fourtuple1[2],fourtuple2[2]]
+      return ExpandedX
+
+
+      
+      
+  def RemapX_fixed(self, IndexMap, g_QMap, UcX):
+
+      ExpandedX = np.full((self.Nqpts,self.Ngvectors,self.Ngvectors),-10-10j) # shape: (number of q, number of g, number of g)
+      Map = []
+
+      for IndexQ in range(self.NQpts):
+          print(self.NQpts)
+          print("Q #",IndexQ)
+          g_Q = IndexMap[IndexQ,2] # g_Q from first list (calculated as Q-q)
+          Indexq = IndexMap[IndexQ,1]   # 
+          G_and_g = g_QMap[g_QMap[:,2] == g_Q]   # select the G,g pairs such that g-G are equal to the g_Q computed as Q-q
+          print(G_and_g)
+          tmp_map = []
+          for element in G_and_g :
+              tmp_map.append([IndexQ, Indexq, element[0],element[1]])
+          Map.append(tmp_map)
+          print("Q #" , IndexQ ,self.Qpts[IndexQ], IndexMap[IndexQ])
+          print("Indices of G, g and g_Q such that g_Q = current Q-q")
+          print(G_and_g)
+          print("remapped indices Q, G1, G2, q, g1, g2")
+         
+          IndexG = []
+          Indexg = []
+          for j in range(len(G_and_g)):
+              IndexG.append(G_and_g[j,0])
+              Indexg.append(G_and_g[j,1])
+#          print("IndexG", IndexG)
+#          print("Indexg", Indexg)
+      Map = np.array(Map.flatten())
+      print(Map)
+
+
+      for IndexQ in range(self.NQpts):
+          Indexq = IndexMap[IndexQ,1]   # 
+          for indexg1 in Indexg : 
+              for indexg2 in Indexg :
+                  for indexG1 in IndexG:
+                      for indexG2 in IndexG :
+                         ExpandedX[Indexq,indexg1,indexg2] = UcX[IndexQ,indexG1,indexG2]
+                                  
+      print()
+      return ExpandedX
+
+               
+#          for j1 in range(len(G_and_g)):
+#              IndexG = G_and_g[j1,0]
+#              Indexg = G_and_g[j1,1]
+          
+
+
+
+
 
 
   def Get_Qminusq(self, threshold = 1E-6):
@@ -291,10 +392,10 @@ class fold_vX():
       print("----------------------------------")
       print("*** Debugging step 1 ***")
       print("----------------------------------")
-      print("shape Q-q-g (N Q points, N q points, N g vectors, 3 components)", QminusqDiffg.shape)
+#      print("shape Q-q-g (N Q points, N q points, N g vectors, 3 components)", QminusqDiffg.shape)
       # Check the condition for all elements to be below thr
       Condition_Qminusq_in_g = np.all(QminusqDiffg < threshold, axis=-1) #shape: (N Q points, N q points, N g vectors)
-      print("shape condition for which Q-q-g = 0 (should be (N Q points, N q points, N g vectors)) ",Condition_Qminusq_in_g.shape) 
+#      print("shape condition for which Q-q-g = 0 (should be (N Q points, N q points, N g vectors)) ",Condition_Qminusq_in_g.shape) 
      # Find the indices where the condition is true
       IndicesQmqEqualg = np.nonzero(Condition_Qminusq_in_g) # tuple of three arrays of Q,q,g indices
       # Stack the indices along the last axis
@@ -381,13 +482,13 @@ class fold_vX():
       print("----------------------------------")
       print("*** Debugging step 2 ***")
       print("----------------------------------")
-      print("list of all g=G+g_Q")
-      print("# G    g_Q-Index   G    g_Q    dummy g_Q index --> True g_Q index    G + g_Q      G+g_Q-G     g: g=g_Q   ")
-      print("10 columns: check that col 10 = col 9 , col 3 + col 4 = col 8 , col 9 = col 4")   
-      for i in range(len(Gplusg_Q)) :
-          for j in range(len(Gplusg_Q[i])):
-              print("G-vector ", i , self.Gvectors[i] , g_Q[j] , j,"-->", OldIndex[j] , Gplusg_Q[i,j], Gplusg_Q[i,j]-self.Gvectors[i],self.gvectors[g_Q_IndexCleanList[j]] )
-          print()
+#      print("list of all g=G+g_Q")
+#      print("# G    g_Q-Index   G    g_Q    dummy g_Q index --> True g_Q index    G + g_Q      G+g_Q-G     g: g=g_Q   ")
+#      print("10 columns: check that col 10 = col 9 , col 3 + col 4 = col 8 , col 9 = col 4")   
+#      for i in range(len(Gplusg_Q)) :
+#          for j in range(len(Gplusg_Q[i])):
+#              print("G-vector ", i , self.Gvectors[i] , g_Q[j] , j,"-->", OldIndex[j] , Gplusg_Q[i,j], Gplusg_Q[i,j]-self.Gvectors[i],self.gvectors[g_Q_IndexCleanList[j]] )
+#          print()
 
 
       start3 = time.time()
@@ -403,11 +504,24 @@ class fold_vX():
       print("shape of Ggg_Q map: ",  Ggg_QMap.shape)
       return Ggg_QMap
 
+  def FindRemappedGMax(self, FragmentIndex, OriginalX, RemappedX, LargeValue = 1E9):
+      for indexg in range(self.Ngvectors) :
+          if RemappedX[FragmentIndex,indexg,indexg] == LargeValue :
+             print("Perfect remapping is achieved up to the {} g-vector # ".format(indexg))
+             print("Please check within the setup report that the corresponding shell energy is higher than the desired convergence block size")
+             print("Then run the BSE diagonalization with RL up to the found value")
+             break
+          Maximumg = indexg
+      return Maximumg
+
   def CompareX(self, FragmentIndex, OriginalX, ExpandedX) :
       ShapeOriginal = OriginalX.shape
       ShapeExpanded = ExpandedX.shape
       if ShapeOriginal != ShapeExpanded : raise("G grids for the original and expanded X not compatible. Comparison impossible")
 
+#      ConvgMax = self.FindRemappedGMax(FragmentIndex, OriginalX, ExpandedX)
+      
+      
       #get real parts extremal values for colorbar
       MinReal = min(np.min(OriginalX.real),np.min(ExpandedX.real))
       MaxReal = max(np.max(OriginalX.real),np.max(ExpandedX.real))
@@ -420,24 +534,49 @@ class fold_vX():
       RealExpandedX = plt.imshow( ExpandedX[FragmentIndex].real , cmap='viridis', vmin = MinReal ,  vmax = MaxReal) 
       plt.title("Real part of expanded X at Q = {}".format(FragmentIndex))
       plt.colorbar()
+#      plt.xlim(0,ConvgMax)
+#      plt.ylim(0,ConvgMax)
       plt.show()
+      
       
       plt.figure(figsize=(7,7))     
       ImagExpandedX = plt.imshow( ExpandedX[FragmentIndex].imag , cmap='viridis' , vmin = MinImag ,  vmax = MaxImag)
       plt.title("Imaginary part of expanded X at Q = {}".format(FragmentIndex))
       plt.colorbar()
+#      plt.xlim(0,ConvgMax)
+#      plt.ylim(0,ConvgMax)
       plt.show()
 
       plt.figure(figsize=(7,7))     
       RealExpandedX = plt.imshow( OriginalX[FragmentIndex].real , cmap='viridis', vmin = MinReal ,  vmax = MaxReal) 
       plt.title("Real part of original X at Q = {}".format(FragmentIndex))
       plt.colorbar()
+#      plt.xlim(0,ConvgMax)
+#      plt.ylim(0,ConvgMax)
       plt.show()
       
       plt.figure(figsize=(7,7))     
       ImagExpandedX = plt.imshow( OriginalX[FragmentIndex].imag , cmap='viridis' , vmin = MinImag ,  vmax = MaxImag)
       plt.title("Imaginary part of original X at Q = {}".format(FragmentIndex))
       plt.colorbar()
+#      plt.xlim(0,ConvgMax)
+#      plt.ylim(0,ConvgMax)
+      plt.show()
+
+      plt.figure(figsize=(7,7))     
+      ImagDiffX = plt.imshow( abs(OriginalX[FragmentIndex].real-ExpandedX[FragmentIndex].real) , cmap='viridis' , vmin = MinImag ,  vmax = MaxImag)
+      plt.title("Difference between original and expanded ReX at Q = {}".format(FragmentIndex))
+      plt.colorbar()
+#      plt.xlim(0,ConvgMax)
+#      plt.ylim(0,ConvgMax)
+      plt.show()
+
+      plt.figure(figsize=(7,7))     
+      ImagDiffX = plt.imshow( abs(OriginalX[FragmentIndex].imag-ExpandedX[FragmentIndex].imag) , cmap='viridis' , vmin = MinImag ,  vmax = MaxImag)
+      plt.title("Difference between original and expanded ImX at Q = {}".format(FragmentIndex))
+      plt.colorbar()
+#      plt.xlim(0,ConvgMax)
+#      plt.ylim(0,ConvgMax)
       plt.show()
       
       return

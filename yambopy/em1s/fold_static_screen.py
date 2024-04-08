@@ -17,6 +17,10 @@ class fold_vX():
 
   def __init__(self, UcLatticePath, UcScreeningPath, ScLatticePath, ScScreeningPath, UcRotatedXOutPath, ScRotatedXOutPath, NewScRotatedXOutPath, UcLattDB ="ns.db1",UcEm1sDB = "ndb.em1s" ,ScLattDB = "ns.db1" ,ScEm1sDB = "ndb.em1s", ExpandUc=True, ExpandSc=False):
  
+      #CREATE THE DIRECTORY WHERE TO PUT THE ROTATED X FOR em1s_rotate IF NEEDED
+      print(os.path.isdir(ScRotatedXOutPath))
+      if os.path.isdir(ScRotatedXOutPath) == False:  os.makedirs(ScRotatedXOutPath)
+     
       #MAKE ACCESSIBLE TO SUBROUTINES SEVERAL INPUT VARIABLES
       self.ScScreeningPath = ScScreeningPath 
       self.NewScRotatedXOutPath = NewScRotatedXOutPath
@@ -180,7 +184,7 @@ class fold_vX():
       # 3) remap X_{g,g'}(q) = X_{G,G'}(Q) 
 
       QqGgMap = self.Remap(g_QIndexMap,g_QMap,self.UcX)
-      self.X = self.BuildX(QqGgMap, self.UcX)
+      self.X , self.ConversionMap = self.BuildX(QqGgMap, self.UcX)
           
           
 #      self.X = self.RemapX(g_QIndexMap,g_QMap,self.UcX)
@@ -241,7 +245,9 @@ class fold_vX():
       
       print('Database of folded em1s saved')
 
-
+      self.CheckStop(self.X, ScLatticePath, self.ConversionMap,0 )
+      
+   
 
 #       """
 #        Save the database
@@ -265,7 +271,39 @@ class fold_vX():
 #            database.variables['X_Q_%d'%(nq+1)][0,0,:] = X[nq].real
 #            database.variables['X_Q_%d'%(nq+1)][0,1,:] = X[nq].imag
 #            database.close()
+  
+    
+  def CheckStop(self,X,ScLatticePath , ConversionMap, indexq):
+              
+      DbName = "ndb.gops"
+      nc = Dataset(ScLatticePath+DbName,"r")
+#      print("Shell in use ")
+#      print(nc.variables["ng_in_shell"][:])
+#      print("Energy of shells")
+#      print(nc.variables["E_of_shell"][:])
 
+      for indexg in range(len(X[indexq])):
+          if ConversionMap[indexq, indexg,indexg] == False :
+              IndexStop = indexg-1
+              print("Last g correctly remapped is ", IndexStop , "of lenght : ", np.linalg.norm(self.gvectors[IndexStop]) )
+              break
+          
+      gVectorsInShells = np.array(nc.variables["ng_in_shell"][:])
+      Shells = np.array(nc.variables["E_of_shell"][:])
+      i=0
+      for g in gVectorsInShells :
+          if IndexStop <= g :
+              LastShell = i
+              break
+          i=i+1
+      EnergyExternalShell = Shells[LastShell]
+      print("Last Shell index: ",LastShell," of energy", EnergyExternalShell, " Ha")
+      print("previous shell: ", LastShell-1, " of energy: " , Shells[LastShell-1], " Ha")
+      print("following shell: ", LastShell+1, " of energy: " , Shells[LastShell+1], " Ha")
+#      print("First g not correctly remapped is" , IndexStop, "of modulus " , np.linalg.norm(self.gvectors[IndexStop]), " belonging to shell # ", LastShell, "of energy " , EnergyExternalShell , " mRy")
+      return  
+              
+          
   def RemapX(self, IndexMap, g_QMap, UcX):
       
       # allocate complex X 
@@ -320,11 +358,13 @@ class fold_vX():
 
   def BuildX(self, MapList, UcX):
       ExpandedX = np.full((self.Nqpts,self.Ngvectors,self.Ngvectors), 0-0j) # shape: (number of q, number of g, number of g)
+      ConversionMap = np.full((self.Nqpts,self.Ngvectors,self.Ngvectors), False)
       for fourtuple1 in MapList:
           for fourtuple2 in MapList :
               if fourtuple1[1] == fourtuple2[1] and fourtuple1[0] == fourtuple2[0]:
                   ExpandedX[fourtuple1[1],fourtuple1[3],fourtuple2[3]] = UcX[fourtuple1[0],fourtuple1[2],fourtuple2[2]]
-      return ExpandedX
+                  ConversionMap[fourtuple1[1],fourtuple1[3],fourtuple2[3]] = True
+      return ExpandedX , ConversionMap
 
 
       
@@ -589,7 +629,6 @@ class fold_vX():
         """
         if os.path.isdir(OutputPath): shutil.rmtree(OutputPath)
         os.mkdir(OutputPath)
-
         # recast X in array of X[q] of the different q
 #       self.new_x = np.array([ self.X[q] for q in range(self.sqq) if self.in_sIBZ[q]==1 ])     
 #        NewX = np.array([ InputX[q] for q in range(self.Nqpts) if self.in_sIBZ[q]==1 ])

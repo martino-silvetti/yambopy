@@ -174,7 +174,6 @@ def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1,dip_dir=[1,1,0],
 
     return 1/(prefactor*gamma0_factor*T_factor)   # seconds
 
-@citation("H.-Y. Chen et al. Phys. Rev. B 100, 075135 (2019)")
 def get_radiative_lifetime_1D(T,state,ylat,ydip,yexc,Meff,eps=1,dip_dir=[0,0,1],shiftE=0):
     """
         Function to compute the radiative lifetime tau_S(T) of a single exciton state for 1D materials.

@@ -207,7 +207,7 @@ def get_intrinsic_radiative_lifetime_2D(state,ylat,ydip,yexc,Meff,eps=1,dip_dir=
     gamma0_factor = (ES/ha2ev)*muS2/(eps*A)
     prefactor = 4*np.pi/speed_of_light/autime2s
 
-    return 1/(prefactor*gamma0_factor*T_factor)   # seconds
+    return 1/(prefactor*gamma0_factor)   # seconds
 
 
 def get_radiative_lifetime_1D(T,state,ylat,ydip,yexc,Meff,eps=1,dip_dir=[0,0,1],shiftE=0):

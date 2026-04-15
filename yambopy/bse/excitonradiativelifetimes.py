@@ -175,7 +175,7 @@ def get_radiative_lifetime_2D(T,state,ylat,ydip,yexc,Meff,eps=1,dip_dir=[1,1,0],
     return 1/(prefactor*gamma0_factor*T_factor)   # seconds
 
 @citation("H.-Y. Chen et al. Phys. Rev. B 100, 075135 (2019)")
-def get_intrinsic_radiative_lifetime_2D(state,ylat,ydip,yexc,Meff,eps=1,dip_dir=[1,1,0],shiftE=0):
+def get_intrinsic_radiative_lifetime_2D(state,ylat,ydip,yexc,eps=1,dip_dir=[1,1,0],shiftE=0):
     """
         Function to compute the intrtinsic radiative lifetime of a single exciton state for 2D materials.
 
@@ -184,7 +184,6 @@ def get_intrinsic_radiative_lifetime_2D(state,ylat,ydip,yexc,Meff,eps=1,dip_dir=
             * ylat:     lattice database, YamboLatticeDB
             * ydip:     dipoles database, YamboDipolesDB
             * yexc:     BSE database, YamboExcitonDB
-            * Meff:     exciton effective mass in electron rest mass (m_e) units. 
             * eps:      environment dielectric constant. Default: eps=1, vacuum.
             * dip_dir:  orientation of the dipole moments. Default: [1,1,0] in the xy plane.
             * shiftE:   rigid shift of exciton energies. Default: shift=0 eV
@@ -201,8 +200,6 @@ def get_intrinsic_radiative_lifetime_2D(state,ylat,ydip,yexc,Meff,eps=1,dip_dir=
 
     muS2 = get_exciton_dipole(state,dip_dir,ylat,ydip,yexc) # Bohr**2
     ES = np.real(yexc.eigenvalues[state])+shiftE # eV
-
-    Meff_eV = Meff*m_e   # eV
     
     gamma0_factor = (ES/ha2ev)*muS2/(eps*A)
     prefactor = 4*np.pi/speed_of_light/autime2s

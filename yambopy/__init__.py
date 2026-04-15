@@ -44,6 +44,7 @@ import numpy as np
 #tools and units
 from yambopy.tools.jsonencoder import *
 from yambopy.tools.types import *
+from yambopy.tools.latex import *
 from yambopy.units import *
 from yambopy.zeros import *
 
@@ -118,10 +119,13 @@ from yambopy.nl.linear_optics import *
 from yambopy.nl.fft_interp import *
 from yambopy.nl.external_efield import *
 from yambopy.nl.damp_it import *
-from yambopy.nl.harmonic_analysis import *
-from yambopy.nl.sum_frequencies import *
+# from yambopy.nl.harmonic_analysis import *
+# from yambopy.nl.sum_frequencies import *
 from yambopy.nl.hhg_tools import *
-
+from yambopy.nl.nl_analysis import *
+from yambopy.nl.sin_analysis import *
+from yambopy.nl.freqmix_analysis import *
+from yambopy.nl.pulse_analysis import *
 #doublegrid files
 from yambopy.double_grid.dg_convergence import *
 

@@ -39,7 +39,7 @@ class YamboQPDB():
         self.qpz          = np.array(qps['Z']).real
         self.spin         = False
         if 'Spin_pol' in qps.keys():
-            self.spin_pol = qps['Spin_pol']
+            self.spin_pol = np.array(qps['Spin_pol'],dtype=int)
             self.spin     = True
 
     @property
@@ -84,58 +84,52 @@ class YamboQPDB():
         """
         Get quasiparticle energies in a list
         """
-        #start arrays
+        # Get values once to avoid multiple property calls
+        min_k = self.min_kpoint
+        min_b = self.min_band
+        max_k = self.max_kpoint
+        nb_tot = self.nbands
+        nk_tot = self.nkpoints
+        
+        ncalculatedkpoints = max_k - min_k + 1
+        
+        # position in array
+        nk_idx = self.kpoint_index - min_k
+        nb_idx = self.band_index - min_b
 
-        # If spin polarisation is present, arrays have one additional dimension
+        if self.spin:
+            sp_idx = self.spin_pol - 1
+            
+            eigenvalues_dft = np.zeros([ncalculatedkpoints, nb_tot, 2])
+            eigenvalues_qp  = np.zeros([ncalculatedkpoints, nb_tot, 2])
+            linewidths      = np.zeros([ncalculatedkpoints, nb_tot, 2])
+            z               = np.zeros([nk_tot, nb_tot, 2])
 
-        # shift
-        ncalculatedkpoints = self.max_kpoint - self.min_kpoint + 1
-        if self.spin is True:
-           eigenvalues_dft = np.zeros([ncalculatedkpoints,self.nbands,2])
-           eigenvalues_qp  = np.zeros([ncalculatedkpoints,self.nbands,2])
-           linewidths      = np.zeros([ncalculatedkpoints,self.nbands,2])
-           z               = np.zeros([self.nkpoints,self.nbands,2])
-
-           for ei,e0i,li,zi,ki,ni,s_pol in zip(self.e,self.e0,self.linewidths,self.qpz,self.kpoint_index,self.band_index,self.spin_pol):
-                # position in array
-                nkpoint = ki - self.min_kpoint 
-                nband   = ni - self.min_band
-                spol    = int(s_pol - 1)
-
-                eigenvalues_dft[nkpoint,nband,spol] = e0i
-                eigenvalues_qp[nkpoint,nband,spol]  = ei
-                linewidths[nkpoint,nband,spol]      = li
-                z[nkpoint,nband,spol]               = zi
-
+            eigenvalues_dft[nk_idx, nb_idx, sp_idx] = self.e0
+            eigenvalues_qp[nk_idx, nb_idx, sp_idx]  = self.e
+            linewidths[nk_idx, nb_idx, sp_idx]      = self.linewidths
+            z[nk_idx, nb_idx, sp_idx]               = self.qpz
         else:
-            eigenvalues_dft = np.zeros([ncalculatedkpoints,self.nbands])
-            eigenvalues_qp  = np.zeros([ncalculatedkpoints,self.nbands])
-            linewidths      = np.zeros([ncalculatedkpoints,self.nbands])
-            z               = np.zeros([self.nkpoints,self.nbands])
+            eigenvalues_dft = np.zeros([ncalculatedkpoints, nb_tot])
+            eigenvalues_qp  = np.zeros([ncalculatedkpoints, nb_tot])
+            linewidths      = np.zeros([ncalculatedkpoints, nb_tot])
+            z               = np.zeros([nk_tot, nb_tot])
 
-            for ei,e0i,li,zi,ki,ni in zip(self.e,self.e0,self.linewidths,self.qpz,self.kpoint_index,self.band_index):
+            eigenvalues_dft[nk_idx, nb_idx] = self.e0
+            eigenvalues_qp[nk_idx, nb_idx]  = self.e
+            linewidths[nk_idx, nb_idx]      = self.linewidths
+            z[nk_idx, nb_idx]               = self.qpz
 
-                # position in array
-                nkpoint = ki - self.min_kpoint 
-                nband   = ni - self.min_band
-
-                eigenvalues_dft[nkpoint,nband] = e0i
-                eigenvalues_qp[nkpoint,nband]  = ei
-                linewidths[nkpoint,nband]      = li
-                z[nkpoint,nband]               = zi
         return eigenvalues_dft, eigenvalues_qp, linewidths, z
 
 
     def get_filtered_qps(self,min_band=None,max_band=None):
         """Return selected QP energies as a flat list"""
-        e0=[]; qp=[]; lw=[]
-        for ei,e0i,li,ki,ni in zip(self.e,self.e0,self.linewidths,self.kpoint_index,self.band_index):
-            if min_band and ni < min_band: continue
-            if max_band and ni > max_band: continue
-            e0.append(e0i)
-            qp.append(ei)
-            lw.append(lw)
-        return e0,qp,lw
+        mask = np.ones(len(self.band_index), dtype=bool)
+        if min_band: mask &= (self.band_index >= min_band)
+        if max_band: mask &= (self.band_index <= max_band)
+        
+        return self.e0[mask].tolist(), self.e[mask].tolist(), self.linewidths[mask].tolist()
 
     def get_direct_gaps(self,valence):
         """
@@ -287,9 +281,6 @@ class YamboQPDB():
         """
         from yambopy.tools.skw import SkwInterpolator
 
-        if verbose:
-            print("This interpolation is provided by the SKW interpolator implemented in Abipy")
-
         cell = (lattice.lat, lattice.red_atomic_positions, lattice.atomic_numbers)
         nelect = 0
         fermie = kwargs.pop('fermie',0)
@@ -399,16 +390,13 @@ class YamboQPDB():
         else: 
            return ks_ebands, qp_ebands
 
-
-#########################################################################################################################
-
     def interpolate_QP_corrections(self,yel_coarse,yel_dense,lpratio=20,verbose=1,**kwargs):
         """
-        Interopolate QP corrections on a dense KS bandstructure.
+        Interpolate QP corrections on a dense KS bandstructure.
 
         Input:
-        * yel_coarse:   YamboElectronsDB corresponding to the YamboQPDB
-        * yel_dense:    YamboElectronsBD of the dense bandstructrure
+        * yel_coarse:   YamboElectronsDB corresponding to the YamboQPDB kgrid
+        * yel_dense:    YamboElectronsDB of the dense bandstructrure
 
         Output
         * dense_ks_bands:   KS band structure, YambopyBandStructure object
@@ -418,15 +406,10 @@ class YamboQPDB():
 
         from yambopy.tools.skw import SkwInterpolator
 
-        if verbose:
-            print("This interpolation is provided by the SKW interpolator implemented in Abipy")
-
-
         #consistency check with electrons k-points
         if len(yel_coarse.red_kpoints)!=self.nkpoints:
             print(len(yel_coarse.red_kpoints),self.nkpoints)
             raise ValueError("The QP database is not consistent with the coarse electron database")
-
 
         #consistency check with electronic bands
         if yel_dense.nbands<self.nbands:
@@ -461,8 +444,6 @@ class YamboQPDB():
 
         return dense_ks_bands,dense_qp_bands
 
-#########################################################################################################################
-
 
     def expand_eigenvalues(self,lattice,data=None):
         """ Expand QP values in full BZ
@@ -496,11 +477,11 @@ class YamboQPDB():
 
     @property
     def min_kpoint(self):
-        return min(self.kpoint_index)
+        return self.kpoint_index.min()
 
     @property
     def max_kpoint(self):
-        return max(self.kpoint_index)
+        return self.kpoint_index.max()
 
     @property
     def nbands(self):
@@ -508,11 +489,11 @@ class YamboQPDB():
 
     @property
     def min_band(self):
-        return min(self.band_index)
+        return self.band_index.min()
 
     @property
     def max_band(self):
-        return max(self.band_index)
+        return self.band_index.max()
 
     @property
     def nkpoints(self):

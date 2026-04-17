@@ -191,9 +191,7 @@ def get_intrinsic_radiative_lifetime_2D(state,ylat,ydip,yexc,eps=1,dip_dir=[1,1,
         Output
             * Radiative lifetime of exciton state in seconds
     """
-
-    if not (isinstance(Meff,float) and isinstance(eps,float)):
-        raise ValueError("Meff and eps must be floats")
+    if eps !=1 : print("[WARNING] Setting eps/=1 for 2D system")
 
     lat = ylat.lat
     A = np.cross(lat[0],lat[1])[2] # Bohr**2

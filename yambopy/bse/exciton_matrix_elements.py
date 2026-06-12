@@ -29,10 +29,13 @@ def exciton_X_matelem(exe_kvec, O_qvec, Akq, Ak, Omn, kpts, contribution='b', di
     Both Forward :
         H.-Y. Chen et al.: Phys. Rev. Lett. 125, 107401 (2020)
         G. Antonius et al.: Phys. Rev. B 105, 085111 (2022)
+        G. Marini et al.: Nano Lett. 24, 20 (2024)
     Both Backward :
-        F. PALEARI, PhD thesis
+        F. Paleari, PhD thesis (2019)
         M. Zanfrognini et al.: Phys. Rev. Lett. 131, 206902 (2023)
         P. Lechifflart et al.: Phys. Rev. Mater. 7, 024006 (2023)
+    Mixed (forward excitons, backward phonons):
+        G. Stefanucci et al.: SciPost Phys. 18, 009 (2025)
 
     Note: Different conventions correspond to different ways of writing the
           the same matrix elements.

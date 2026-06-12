@@ -20,6 +20,23 @@ def exciton_X_matelem(exe_kvec, O_qvec, Akq, Ak, Omn, kpts, contribution='b', di
     discarding the third term (disconnected diagram). The calculation is performed in the
     Tamm-Dancoff approximation.
 
+    Here we follow k-Q -> k for electronic transitions (backward convention),
+    while using k -> k+q for O(q) matrix elements (forward convention).
+    So this is mixed convention as given in
+    Eq. D8 of M. Nalabothula et al.: Phys. Rev. B 113, 205130 (2026)
+
+    Other conventions see (not used here)
+    Both Forward :
+        H.-Y. Chen et al.: Phys. Rev. Lett. 125, 107401 (2020)
+        G. Antonius et al.: Phys. Rev. B 105, 085111 (2022)
+    Both Backward :
+        F. PALEARI, PhD thesis
+        M. Zanfrognini et al.: Phys. Rev. Lett. 131, 206902 (2023)
+        P. Lechifflart et al.: Phys. Rev. Mater. 7, 024006 (2023)
+
+    Note: Different conventions correspond to different ways of writing the
+          the same matrix elements.
+
     Parameters
     ----------
     exe_kvec : array_like
